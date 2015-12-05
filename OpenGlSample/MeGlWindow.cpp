@@ -1,8 +1,13 @@
 #include <GL\glew.h>
+#include <glm\glm.hpp>
 #include <iostream>
 #include <fstream>
 
 #include "MeGlWindow.h"
+
+#include "Vertex.h"
+#include "ShapeData.h"
+#include "ShapeGenerator.h"
 
 using namespace std;
 
@@ -45,6 +50,7 @@ string readShaderCode(const char* fileName) {
 	return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
+GLuint programId;
 void installShaders() {
 	GLuint vertexShaderId = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragmentShaderId = glCreateShader(GL_FRAGMENT_SHADER);
@@ -63,7 +69,7 @@ void installShaders() {
 	glCompileShader(fragmentShaderId);
 	if (!(checkShaderStatus(vertexShaderId) && checkShaderStatus(fragmentShaderId))) return;
 
-	GLuint programId = glCreateProgram();
+	programId = glCreateProgram();
 	glAttachShader(programId, vertexShaderId);
 	glAttachShader(programId, fragmentShaderId);
 	glLinkProgram(programId);
@@ -116,13 +122,34 @@ void drawTriangles() {
 
 void sendNextTriangleToOpenGL() {
 	if (triCount == 20) return;
-	GLfloat verts[] = {
-		-1.0f + 0.1f * triCount,		-1.0f, 0, +1.0f, +0.0f, +0.0f,
-		-1.0f + 0.1f * (triCount + 1),	-1.0f, 0, +1.0f, +0.0f, +0.0f,
-		-1.0f + 0.1f * triCount,		+0.0f, 0, +1.0f, +0.0f, +0.0f,
+	Vertex verts[] = {
+		glm::vec3(-1.0f + 0.1f * triCount,			-1.0f, 0.0f), glm::vec3(+1.0f, +0.0f, +0.0f),
+		glm::vec3(-1.0f + 0.1f * (triCount + 1),	-1.0f, 0.0f), glm::vec3(+1.0f, +0.0f, +0.0f),
+		glm::vec3(-1.0f + 0.1f * triCount,			+0.0f, 0.0f), glm::vec3(+1.0f, +0.0f, +0.0f),
 	};
 	glBufferSubData(GL_ARRAY_BUFFER, triCount * sizeof(verts), sizeof(verts), verts);
 	triCount++;
+}
+
+void drawTriangle() {
+	ShapeData triangle = ShapeGenerator::makeTriangle();
+
+	GLuint vertBufferId;
+	glGenBuffers(1, &vertBufferId);
+	glBindBuffer(GL_ARRAY_BUFFER, vertBufferId);
+	glBufferData(GL_ARRAY_BUFFER, triangle.vertexBufferSize(), triangle.vertices, GL_STATIC_DRAW);
+
+	glEnableVertexAttribArray(0);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), 0);
+	glEnableVertexAttribArray(1);
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (char*)(sizeof(GLfloat) * 3));
+
+	GLuint indexArrayBufferID;
+	glGenBuffers(1, &indexArrayBufferID);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexArrayBufferID);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, triangle.indexBufferSize(), triangle.indices, GL_STATIC_DRAW);
+
+	triangle.cleanup();
 }
 
 void MeGlWindow::initializeGL() {
@@ -134,7 +161,10 @@ void MeGlWindow::initializeGL() {
 	//draw2Triangles();
 
 	// ex2
-	drawTriangles();
+	//drawTriangles();
+
+	// ex3
+	drawTriangle();
 }
 
 void MeGlWindow::paintGL() {
@@ -142,12 +172,28 @@ void MeGlWindow::paintGL() {
 	glViewport(0, 0, width(), height());
 
 	// ex1 depth buffer
-	glClear(GL_DEPTH_BUFFER_BIT);
+	//glClear(GL_DEPTH_BUFFER_BIT);
 	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 
 	// ex2 color buffer
-	sendNextTriangleToOpenGL();
+	//sendNextTriangleToOpenGL();
 	//glClear(GL_COLOR_BUFFER_BIT);
+	//glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	//glDrawArrays(GL_TRIANGLES, (triCount - 1) * 3, triCount * 3);
+
+	// ex3 uniform
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	glDrawArrays(GL_TRIANGLES, (triCount - 1) * 3, triCount * 3);
+	glm::vec3 dominatingColor(0.0f, 1.0f, 0.0f);
+	GLint dominatingColorUniformLocation = glGetUniformLocation(programId, "dominatingColor");
+	GLint yFlipUniformLocation = glGetUniformLocation(programId, "yFlip");
+
+	glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
+	glUniform1f(yFlipUniformLocation, 1.0f);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+
+	dominatingColor.g = 0.0f;
+	dominatingColor.b = 1.0f;
+	glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
+	glUniform1f(yFlipUniformLocation, -1.0f);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
 }
