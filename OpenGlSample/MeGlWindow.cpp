@@ -1,6 +1,7 @@
 #include <GL\glew.h>
 #include <glm\glm.hpp>
 #include <glm\gtc\matrix_transform.hpp>
+#include <glm\gtx\transform.hpp>
 #include <iostream>
 #include <fstream>
 
@@ -75,9 +76,18 @@ void installShaders() {
 	glAttachShader(programId, vertexShaderId);
 	glAttachShader(programId, fragmentShaderId);
 	glLinkProgram(programId);
+
+	glDeleteShader(vertexShaderId);
+	glDeleteShader(fragmentShaderId);
+
 	if (!checkProgramStatus(programId)) return;
 
 	glUseProgram(programId);
+}
+
+MeGlWindow::~MeGlWindow() {
+	glUseProgram(0);
+	glDeleteProgram(programId);
 }
 
 void draw2Triangles() {
@@ -178,6 +188,34 @@ void drawCube() {
 	cube.cleanup();
 }
 
+void drawInstanced(GLfloat width, GLfloat height) {
+	drawCube();
+
+	GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
+	mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
+	mat4 matrix[] = {
+		projectionMatrix * glm::translate(vec3(-1.0f, 0.0f, -3.0f)) * glm::rotate(45.0f, vec3(1.0f, 0.0f, 0.0f)),
+		projectionMatrix * glm::translate(vec3(1.0f, 0.0f, -3.75f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f)),
+	};
+
+	GLuint transformationMatrixBufferId;
+	glGenBuffers(1, &transformationMatrixBufferId);
+	glBindBuffer(GL_ARRAY_BUFFER, transformationMatrixBufferId);
+	glBufferData(GL_ARRAY_BUFFER, sizeof(matrix), matrix, GL_STATIC_DRAW);
+	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 0));
+	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 4));
+	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 8));
+	glVertexAttribPointer(5, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 12));
+	glEnableVertexAttribArray(2);
+	glEnableVertexAttribArray(3);
+	glEnableVertexAttribArray(4);
+	glEnableVertexAttribArray(5);
+	glVertexAttribDivisor(2, 1);
+	glVertexAttribDivisor(3, 1);
+	glVertexAttribDivisor(4, 1);
+	glVertexAttribDivisor(5, 1);
+}
+
 void MeGlWindow::initializeGL() {
 	glewInit();
 	glEnable(GL_DEPTH_TEST);
@@ -193,56 +231,58 @@ void MeGlWindow::initializeGL() {
 	//drawTriangle();
 
 	// ex4
-	drawCube();
+	//drawCube();
+
+	// ex5
+	drawInstanced(width(), height());
 }
 
-void MeGlWindow::paintGL() {
-	glClearColor(0, 0, 0, 1);
-	glViewport(0, 0, width(), height());
+void paintDepthBuffer() {
+	glClear(GL_DEPTH_BUFFER_BIT);
+	glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
+}
 
-	// ex1 depth buffer
-	//glClear(GL_DEPTH_BUFFER_BIT);
-	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_SHORT, 0);
-
-	// ex2 color buffer
-	//sendNextTriangleToOpenGL();
-	//glClear(GL_COLOR_BUFFER_BIT);
-	//glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	//glDrawArrays(GL_TRIANGLES, (triCount - 1) * 3, triCount * 3);
-
-	// ex3 uniform
-	//glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
-	//glm::vec3 dominatingColor(0.0f, 1.0f, 0.0f);
-	//GLint dominatingColorUniformLocation = glGetUniformLocation(programId, "dominatingColor");
-	//GLint yFlipUniformLocation = glGetUniformLocation(programId, "yFlip");
-
-	//glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
-	//glUniform1f(yFlipUniformLocation, 1.0f);
-	//glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
-
-	//dominatingColor.g = 0.0f;
-	//dominatingColor.b = 1.0f;
-	//glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
-	//glUniform1f(yFlipUniformLocation, -1.0f);
-	//glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
-
-	// ex4 draw cube
+void paintColorBuffer() {
+	sendNextTriangleToOpenGL();
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glDrawArrays(GL_TRIANGLES, (triCount - 1) * 3, triCount * 3);
+}
+
+void paintUniform() {
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glm::vec3 dominatingColor(0.0f, 1.0f, 0.0f);
+	GLint dominatingColorUniformLocation = glGetUniformLocation(programId, "dominatingColor");
+	GLint yFlipUniformLocation = glGetUniformLocation(programId, "yFlip");
+
+	glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
+	glUniform1f(yFlipUniformLocation, 1.0f);
+	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
+
+	dominatingColor.g = 0.0f;
+	dominatingColor.b = 1.0f;
+	glUniform3fv(dominatingColorUniformLocation, 1, &dominatingColor[0]);
+	glUniform1f(yFlipUniformLocation, -1.0f);
+	glDrawElements(GL_TRIANGLES, 3, GL_UNSIGNED_SHORT, 0);
+}
+
+void paintCube(GLfloat width, GLfloat height) {
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
 	//mat4 projectionMatrix = perspective(20.0f, (GLfloat)width() / height(), 0.1f, 10.0f);
 	//mat4 transformMatrix = translate(mat4(), vec3(0.0f, 0.0f, -3.0f));
 	//mat4 rotationMatrix = rotate(mat4(), 54.0f, vec3(1.0f, 0.0f, 0.0f));
 	//mat4 matrix = projectionMatrix * transformMatrix * rotationMatrix;
 
-	////GLint projectionMatrixUniformLocation = glGetUniformLocation(programId, "projectionMatrix");
-	////GLint transformMatrixUniformLocation = glGetUniformLocation(programId, "transformMatrix");
-	////GLint rotationMatrixUniformLocation = glGetUniformLocation(programId, "rotationMatrix");
-	////glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
-	////glUniformMatrix4fv(transformMatrixUniformLocation, 1, GL_FALSE, &transformMatrix[0][0]);
-	////glUniformMatrix4fv(rotationMatrixUniformLocation, 1, GL_FALSE, &rotationMatrix[0][0]);
+	//GLint projectionMatrixUniformLocation = glGetUniformLocation(programId, "projectionMatrix");
+	//GLint transformMatrixUniformLocation = glGetUniformLocation(programId, "transformMatrix");
+	//GLint rotationMatrixUniformLocation = glGetUniformLocation(programId, "rotationMatrix");
+	//glUniformMatrix4fv(projectionMatrixUniformLocation, 1, GL_FALSE, &projectionMatrix[0][0]);
+	//glUniformMatrix4fv(transformMatrixUniformLocation, 1, GL_FALSE, &transformMatrix[0][0]);
+	//glUniformMatrix4fv(rotationMatrixUniformLocation, 1, GL_FALSE, &rotationMatrix[0][0]);
 	//GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
 	//glUniformMatrix4fv(matrixUniformLocation, 1, GL_FALSE, &matrix[0][0]);
 
-	mat4 projectionMatrix = perspective(20.0f, (GLfloat)width() / height(), 0.1f, 10.0f);
+	mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
 	mat4 projectionTransformMatrix = translate(projectionMatrix, vec3(0.0f, 0.0f, -3.0f));
 	mat4 projectionTransformRotationMatrix = rotate(projectionTransformMatrix, 45.0f, vec3(1.0f, 0.0f, 0.0f));
 
@@ -250,4 +290,29 @@ void MeGlWindow::paintGL() {
 	glUniformMatrix4fv(matrixUniformLocation, 1, GL_FALSE, &projectionTransformRotationMatrix[0][0]);
 
 	glDrawElements(GL_TRIANGLES, numIndices, GL_UNSIGNED_SHORT, 0);
+}
+
+void paintInstanced(GLfloat width, GLfloat height) {
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	glDrawElementsInstanced(GL_TRIANGLES, numIndices, GL_UNSIGNED_SHORT, 0, 2);
+}
+
+void MeGlWindow::paintGL() {
+	glClearColor(0, 0, 0, 1);
+	glViewport(0, 0, width(), height());
+
+	// ex1 depth buffer
+	//paintDepthBuffer();
+
+	// ex2 color buffer
+	//paintColorBuffer();
+
+	// ex3 uniform
+	//paintUniform();
+
+	// ex4 draw cube
+	//paintCube(width(), height());
+
+	// ex5 ex4 draw instance
+	paintInstanced(width(), height());
 }

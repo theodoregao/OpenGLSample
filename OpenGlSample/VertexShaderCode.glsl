@@ -11,8 +11,11 @@ in layout(location=1) vec3 vertexColor;
 //uniform mat4 transformMatrix;
 //uniform mat4 rotationMatrix;
 //uniform mat4 projectionMatrix;
-uniform mat4 matrix;
 
+//uniform mat4 matrix;
+
+// ex5
+in layout(location=2) mat4 matrix;
 out vec3 theColor;
 
 void main()
