@@ -191,7 +191,7 @@ void drawShape(ShapeData shape) {
 	shape.cleanup();
 }
 
-void drawInstanced(GLfloat width, GLfloat height) {
+void drawInstanced() {
 	drawShape(ShapeGenerator::makeArrow());
 
 	//GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
@@ -226,6 +226,57 @@ void drawInstanced(GLfloat width, GLfloat height) {
 	glVertexAttribDivisor(5, 1);
 }
 
+GLuint vertextBufferId;
+GLuint indexBufferId;
+GLuint cubeNumIndices;
+GLuint arrowNumIndices;
+GLuint cubeVertexArrayObjectId;
+GLuint arrowVertexArrayObjectId;
+GLuint arrowIndexDataByteOffset;
+void drawDifferentInstances() {
+	ShapeData cube = ShapeGenerator::makeCube();
+	ShapeData arrow = ShapeGenerator::makeArrow();
+
+	glGenBuffers(1, &vertextBufferId);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBufferId);
+	glBufferData(GL_ARRAY_BUFFER, cube.vertexBufferSize() + arrow.vertexBufferSize(), 0, GL_STATIC_DRAW);
+	glBufferSubData(GL_ARRAY_BUFFER, 0, cube.vertexBufferSize(), cube.vertices);
+	glBufferSubData(GL_ARRAY_BUFFER, cube.vertexBufferSize(), arrow.vertexBufferSize(), arrow.vertices);
+
+	glGenBuffers(1, &indexBufferId);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, cube.indexBufferSize() + arrow.indexBufferSize(), 0, GL_STATIC_DRAW);
+	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, 0, cube.indexBufferSize(), cube.indices);
+	glBufferSubData(GL_ELEMENT_ARRAY_BUFFER, cube.indexBufferSize(), arrow.indexBufferSize(), arrow.indices);
+
+	cubeNumIndices = cube.numIndices;
+	arrowNumIndices = arrow.numIndices;
+
+	arrowIndexDataByteOffset = cube.indexBufferSize();
+
+	glGenVertexArrays(1, &cubeVertexArrayObjectId);
+	glGenVertexArrays(1, &arrowVertexArrayObjectId);
+
+	glBindVertexArray(cubeVertexArrayObjectId);
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBufferId);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(GL_FLOAT) * 0));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(GL_FLOAT) * 3));
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
+
+	glBindVertexArray(arrowVertexArrayObjectId);
+	glEnableVertexAttribArray(0);
+	glEnableVertexAttribArray(1);
+	glBindBuffer(GL_ARRAY_BUFFER, vertextBufferId);
+	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(cube.vertexBufferSize() + sizeof(GL_FLOAT) * 0));
+	glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(cube.vertexBufferSize() + sizeof(GL_FLOAT) * 3));
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexBufferId);
+
+	cube.cleanup();
+	arrow.cleanup();
+}
+
 void MeGlWindow::initializeGL() {
 	glewInit();
 	glEnable(GL_DEPTH_TEST);
@@ -245,7 +296,10 @@ void MeGlWindow::initializeGL() {
 
 	// ex5    // ex6 camera
 	setMouseTracking(true);
-	drawInstanced(width(), height());
+	//drawInstanced();
+
+	// ex7
+	drawDifferentInstances();
 }
 
 void paintDepthBuffer() {
@@ -317,6 +371,28 @@ void paintInstanced(GLfloat width, GLfloat height) {
 	glDrawElementsInstanced(GL_TRIANGLES, numIndices, GL_UNSIGNED_SHORT, 0, 2);
 }
 
+void paintDifferentInstances(GLfloat width, GLfloat height) {
+	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+
+	mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
+	mat4 matrix;
+	GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
+
+	glBindVertexArray(cubeVertexArrayObjectId);
+	matrix = projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(-3.5f, 0.0f, -3.0f)) * glm::rotate(45.0f, vec3(1.0f, 0.0f, 0.0f));
+	glUniformMatrix4fv(matrixUniformLocation, 1, GL_FALSE, &matrix[0][0]);
+	glDrawElements(GL_TRIANGLES, cubeNumIndices, GL_UNSIGNED_SHORT, 0);
+
+	matrix = projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(3.5f, 0.0f, -3.75f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f));
+	glUniformMatrix4fv(matrixUniformLocation, 1, GL_FALSE, &matrix[0][0]);
+	glDrawElements(GL_TRIANGLES, cubeNumIndices, GL_UNSIGNED_SHORT, 0);
+
+	glBindVertexArray(arrowVertexArrayObjectId);
+	matrix = projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(0.0f, 0.0f, -2.5f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f));
+	glUniformMatrix4fv(matrixUniformLocation, 1, GL_FALSE, &matrix[0][0]);
+	glDrawElements(GL_TRIANGLES, arrowNumIndices, GL_UNSIGNED_SHORT, (void*)arrowIndexDataByteOffset);
+}
+
 void MeGlWindow::paintGL() {
 	glClearColor(0, 0, 0, 1);
 	glViewport(0, 0, width(), height());
@@ -334,7 +410,10 @@ void MeGlWindow::paintGL() {
 	//paintCube(width(), height());
 
 	// ex5 draw instance
-	paintInstanced(width(), height());
+	//paintInstanced(width(), height());
+
+	// ex7 draw differnt instance
+	paintDifferentInstances(width(), height());
 }
 
 void MeGlWindow::mouseMoveEvent(QMouseEvent* qMouseEvent) {
@@ -345,10 +424,12 @@ void MeGlWindow::mouseMoveEvent(QMouseEvent* qMouseEvent) {
 void MeGlWindow::keyPressEvent(QKeyEvent* qKeyEvent) {
 	switch (qKeyEvent->key()) {
 	case Qt::Key::Key_W:
+	case Qt::Key::Key_Up:
 		camera.moveUp();
 		break;
 
 	case Qt::Key::Key_S:
+	case Qt::Key::Key_Down:
 		camera.moveDown();
 		break;
 
@@ -362,14 +443,12 @@ void MeGlWindow::keyPressEvent(QKeyEvent* qKeyEvent) {
 		camera.strafeRight();
 		break;
 
-	case Qt::Key::Key_R:
-	case Qt::Key::Key_Up:
-		camera.moveUp();
+	case Qt::Key::Key_E:
+		camera.moveForward();
 		break;
 
 	case Qt::Key::Key_F:
-	case Qt::Key::Key_Down:
-		camera.moveDown();
+		camera.moveBackward();
 		break;
 	}
 	repaint();

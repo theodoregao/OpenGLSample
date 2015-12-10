@@ -12,10 +12,12 @@ in layout(location=1) vec3 vertexColor;
 //uniform mat4 rotationMatrix;
 //uniform mat4 projectionMatrix;
 
-//uniform mat4 matrix;
+// ex7
+uniform mat4 matrix;
 
-// ex5
-in layout(location=2) mat4 matrix;
+// ex5 ex6
+//in layout(location=2) mat4 matrix;
+
 out vec3 theColor;
 
 void main()
@@ -27,7 +29,12 @@ void main()
 
 	// ex4
 	vec4 v = vec4(position, 1.0);
+	
+	// ex4
 	//gl_Position = projectionMatrix * transformMatrix * rotationMatrix * v;
+	
+	// ex5 ex6 ex7
 	gl_Position = matrix * v;
-    theColor = vertexColor;
+	
+	theColor = vertexColor;
 }
