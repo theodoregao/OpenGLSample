@@ -4,15 +4,22 @@
 #include <glm\gtx\transform.hpp>
 #include <iostream>
 #include <fstream>
+#include <QtGui\qmouseevent>
+#include <QtGui\qkeyevent>
 
 #include "MeGlWindow.h"
-
 #include "Vertex.h"
 #include "ShapeData.h"
 #include "ShapeGenerator.h"
+#include "Camera.h"
 
 using namespace std;
 using namespace glm;
+
+int triCount = 0;
+GLuint programId;
+int numIndices;
+Camera camera;
 
 boolean checkStatus(GLuint objectId, PFNGLGETSHADERIVPROC objectPropertyGetterFunc,
 	PFNGLGETSHADERINFOLOGPROC objectGetInfoLogFunc, GLenum statusType) {
@@ -53,7 +60,6 @@ string readShaderCode(const char* fileName) {
 	return std::string(std::istreambuf_iterator<char>(input), std::istreambuf_iterator<char>());
 }
 
-GLuint programId;
 void installShaders() {
 	GLuint vertexShaderId = glCreateShader(GL_VERTEX_SHADER);
 	GLuint fragmentShaderId = glCreateShader(GL_FRAGMENT_SHADER);
@@ -119,7 +125,6 @@ void draw2Triangles() {
 	glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
 }
 
-int triCount = 0;
 void drawTriangles() {
 	GLuint vertBufferId;
 	glGenBuffers(1, &vertBufferId);
@@ -143,7 +148,6 @@ void sendNextTriangleToOpenGL() {
 	triCount++;
 }
 
-int numIndices;
 void drawTriangle() {
 	ShapeData triangle = ShapeGenerator::makeTriangle();
 
@@ -166,13 +170,12 @@ void drawTriangle() {
 	triangle.cleanup();
 }
 
-void drawCube() {
-	ShapeData cube = ShapeGenerator::makeCube();
+void drawShape(ShapeData shape) {
 
 	GLuint vertBufferId;
 	glGenBuffers(1, &vertBufferId);
 	glBindBuffer(GL_ARRAY_BUFFER, vertBufferId);
-	glBufferData(GL_ARRAY_BUFFER, cube.vertexBufferSize(), cube.vertices, GL_STATIC_DRAW);
+	glBufferData(GL_ARRAY_BUFFER, shape.vertexBufferSize(), shape.vertices, GL_STATIC_DRAW);
 
 	glEnableVertexAttribArray(0);
 	glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), 0);
@@ -182,26 +185,33 @@ void drawCube() {
 	GLuint indexArrayBufferID;
 	glGenBuffers(1, &indexArrayBufferID);
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, indexArrayBufferID);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, cube.indexBufferSize(), cube.indices, GL_STATIC_DRAW);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, shape.indexBufferSize(), shape.indices, GL_STATIC_DRAW);
 
-	numIndices = cube.numIndices;
-	cube.cleanup();
+	numIndices = shape.numIndices;
+	shape.cleanup();
 }
 
 void drawInstanced(GLfloat width, GLfloat height) {
-	drawCube();
+	drawShape(ShapeGenerator::makeArrow());
 
-	GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
-	mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
-	mat4 matrix[] = {
-		projectionMatrix * glm::translate(vec3(-1.0f, 0.0f, -3.0f)) * glm::rotate(45.0f, vec3(1.0f, 0.0f, 0.0f)),
-		projectionMatrix * glm::translate(vec3(1.0f, 0.0f, -3.75f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f)),
-	};
+	//GLint matrixUniformLocation = glGetUniformLocation(programId, "matrix");
+	//mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
+	//mat4 matrix[] = {
+	//	// ex6 camera
+	//	projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(-1.0f, 0.0f, -3.0f)) * glm::rotate(45.0f, vec3(1.0f, 0.0f, 0.0f)),
+	//	projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(1.0f, 0.0f, -3.75f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f)),
+	//};
+
+	//GLuint transformationMatrixBufferId;
+	//glGenBuffers(1, &transformationMatrixBufferId);
+	//glBindBuffer(GL_ARRAY_BUFFER, transformationMatrixBufferId);
+	//glBufferData(GL_ARRAY_BUFFER, sizeof(matrix), matrix, GL_STATIC_DRAW);
 
 	GLuint transformationMatrixBufferId;
 	glGenBuffers(1, &transformationMatrixBufferId);
 	glBindBuffer(GL_ARRAY_BUFFER, transformationMatrixBufferId);
-	glBufferData(GL_ARRAY_BUFFER, sizeof(matrix), matrix, GL_STATIC_DRAW);
+
+	glBufferData(GL_ARRAY_BUFFER, sizeof(mat4) * 2, 0, GL_DYNAMIC_DRAW);
 	glVertexAttribPointer(2, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 0));
 	glVertexAttribPointer(3, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 4));
 	glVertexAttribPointer(4, 4, GL_FLOAT, GL_FALSE, sizeof(mat4), (void*)(sizeof(GL_FLOAT) * 8));
@@ -233,7 +243,8 @@ void MeGlWindow::initializeGL() {
 	// ex4
 	//drawCube();
 
-	// ex5
+	// ex5    // ex6 camera
+	setMouseTracking(true);
 	drawInstanced(width(), height());
 }
 
@@ -294,6 +305,15 @@ void paintCube(GLfloat width, GLfloat height) {
 
 void paintInstanced(GLfloat width, GLfloat height) {
 	glClear(GL_DEPTH_BUFFER_BIT | GL_COLOR_BUFFER_BIT);
+	
+	mat4 projectionMatrix = perspective(20.0f, width / height, 0.1f, 10.0f);
+	mat4 matrix[] = {
+		// ex6 camera
+		projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(-1.0f, 0.0f, -3.0f)) * glm::rotate(45.0f, vec3(1.0f, 0.0f, 0.0f)),
+		projectionMatrix * camera.getWorldToViewMatrix() * glm::translate(vec3(1.0f, 0.0f, -3.75f)) * glm::rotate(125.0f, vec3(0.0f, 1.0f, 0.0f)),
+	};
+
+	glBufferData(GL_ARRAY_BUFFER, sizeof(matrix), matrix, GL_DYNAMIC_DRAW);
 	glDrawElementsInstanced(GL_TRIANGLES, numIndices, GL_UNSIGNED_SHORT, 0, 2);
 }
 
@@ -313,6 +333,44 @@ void MeGlWindow::paintGL() {
 	// ex4 draw cube
 	//paintCube(width(), height());
 
-	// ex5 ex4 draw instance
+	// ex5 draw instance
 	paintInstanced(width(), height());
+}
+
+void MeGlWindow::mouseMoveEvent(QMouseEvent* qMouseEvent) {
+	camera.mouseUpdate(glm::vec2(qMouseEvent->x(), qMouseEvent->y()));
+	repaint();
+}
+
+void MeGlWindow::keyPressEvent(QKeyEvent* qKeyEvent) {
+	switch (qKeyEvent->key()) {
+	case Qt::Key::Key_W:
+		camera.moveUp();
+		break;
+
+	case Qt::Key::Key_S:
+		camera.moveDown();
+		break;
+
+	case Qt::Key::Key_A:
+	case Qt::Key::Key_Left:
+		camera.strafeLeft();
+		break;
+
+	case Qt::Key::Key_D:
+	case Qt::Key::Key_Right:
+		camera.strafeRight();
+		break;
+
+	case Qt::Key::Key_R:
+	case Qt::Key::Key_Up:
+		camera.moveUp();
+		break;
+
+	case Qt::Key::Key_F:
+	case Qt::Key::Key_Down:
+		camera.moveDown();
+		break;
+	}
+	repaint();
 }
